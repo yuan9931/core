@@ -43,7 +43,7 @@ namespace ModCore.Modules
 
         private readonly MainMenu _mainMenu = new();
 
-        private static readonly string STEAMWORKSHOP_PATH_STR = "workshop\\content\\588650\\".Replace('\\', Path.DirectorySeparatorChar);
+        private static readonly string STEAMWORKSHOP_PATH_STR = "workshop\\content\\480\\".Replace('\\', Path.DirectorySeparatorChar);
 
         /// <summary>
         /// Gets the options section associated with the main menu of the DCCM.
@@ -142,7 +142,7 @@ namespace ModCore.Modules
                     options.addSimpleWidget(GetString("Get mods"),
                     GetString("Get mods from the Steam Workshop"), () =>
                    {
-                       OpenURL("https://steamcommunity.com/workshop/browse/?appid=588650&searchtext=%5BDCCM%5D");
+                       OpenURL("https://steamcommunity.com/workshop/browse/?appid=480&searchtext=%5BDCCM%5D");
                    }, Ref<int>.In(5), flow);
 
                     var disabledMAPI = ((EItemState)SteamUGC.GetItemState(new(MAPI_PFID))).HasFlag(EItemState.k_EItemStateDisabledLocally);
@@ -171,7 +171,7 @@ namespace ModCore.Modules
 
                             System.Diagnostics.Process.Start(new ProcessStartInfo
                             {
-                                FileName = "steam://rungameid/588650",
+                                FileName = "steam://rungameid/480",
                                 UseShellExecute = true
                             });
                             Environment.Exit(0);

@@ -19,7 +19,7 @@ namespace DCCMShell
                 AssemblyLoadContext.Default.LoadFromAssemblyPath(asmPath);
             }
 
-            Environment.SetEnvironmentVariable("SteamAPPId", "588650");
+            Environment.SetEnvironmentVariable("SteamAPPId", "480");
 
             var err = Startup.CheckEnv(out var errMsg);
             if (err != Startup.CheckEnvResult.Success)
