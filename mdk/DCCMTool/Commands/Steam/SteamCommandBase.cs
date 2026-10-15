@@ -9,10 +9,10 @@ namespace DCCMTool.Commands.Steam
 {
     internal abstract class SteamCommandBase<TSettings> : CommandBase<TSettings> where TSettings : CommandSettings
     {
-        public static readonly AppId_t APPID = new(480);
+        public static readonly AppId_t APPID = new(588650);
         public sealed override async Task<int> ExecuteAsync()
         {
-            Environment.SetEnvironmentVariable("SteamAPPId", "480");
+            Environment.SetEnvironmentVariable("SteamAPPId", "588650");
             var initResult = SteamAPI.InitEx(out var err);
 
             if (initResult != ESteamAPIInitResult.k_ESteamAPIInitResult_OK)

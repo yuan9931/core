@@ -174,7 +174,7 @@ namespace SteamLauncher.Workshop
         /// <returns>Operation result status</returns>
         public async Task<SteamWorkResult> SteamWork(bool noVerify)
         {
-            Environment.SetEnvironmentVariable("SteamAPPId", "480");
+            Environment.SetEnvironmentVariable("SteamAPPId", "588650");
 
             Logger.Information("Trying to load steam api");
 
@@ -192,8 +192,8 @@ namespace SteamLauncher.Workshop
                 throw;
             }
 
-            // SteamUGC.SubscribeItem(new(MAPI_PFID));
-            // SteamUGC.DownloadItem(new(MAPI_PFID), true);
+            SteamUGC.SubscribeItem(new(MAPI_PFID));
+            SteamUGC.DownloadItem(new(MAPI_PFID), true);
 
             await Task.Delay(100);
 
@@ -203,54 +203,53 @@ namespace SteamLauncher.Workshop
                 _WHILE_RE_TRY:
                 await Task.Delay(100);
 
-                // var state = (EItemState)SteamUGC.GetItemState(new(MAPI_PFID));
+                var state = (EItemState)SteamUGC.GetItemState(new(MAPI_PFID));
 
-                // if (state.HasFlag(EItemState.k_EItemStateDownloading) ||
-                //     state.HasFlag(EItemState.k_EItemStateDownloadPending))
-                // {
-                //     Logger.Information("DCCM is downloading...");
-                //     while (state.HasFlag(EItemState.k_EItemStateDownloading) ||
-                //            state.HasFlag(EItemState.k_EItemStateDownloadPending))
-                //     {
-                //         await Task.Delay(500);
-                //         state = (EItemState)SteamUGC.GetItemState(new(MAPI_PFID));
-                //     }
-                //     continue;
-                // }
+                if (state.HasFlag(EItemState.k_EItemStateDownloading) ||
+                    state.HasFlag(EItemState.k_EItemStateDownloadPending))
+                {
+                    Logger.Information("DCCM is downloading...");
+                    while (state.HasFlag(EItemState.k_EItemStateDownloading) ||
+                           state.HasFlag(EItemState.k_EItemStateDownloadPending))
+                    {
+                        await Task.Delay(500);
+                        state = (EItemState)SteamUGC.GetItemState(new(MAPI_PFID));
+                    }
+                    continue;
+                }
 
-                // if (!state.HasFlag(EItemState.k_EItemStateSubscribed))
-                // {
-                //     SteamUGC.SubscribeItem(new(MAPI_PFID));
-                //     await Task.Delay(1000);
-                //     continue;
-                // }
+                if (!state.HasFlag(EItemState.k_EItemStateSubscribed))
+                {
+                    SteamUGC.SubscribeItem(new(MAPI_PFID));
+                    await Task.Delay(1000);
+                    continue;
+                }
 
-                // if (!state.HasFlag(EItemState.k_EItemStateInstalled))
-                // {
-                //     SteamUGC.DownloadItem(new(MAPI_PFID), true);
+                if (!state.HasFlag(EItemState.k_EItemStateInstalled))
+                {
+                    SteamUGC.DownloadItem(new(MAPI_PFID), true);
 
-                //     if (!state.HasFlag(EItemState.k_EItemStateDisabledLocally))
-                //     {
-                //         Logger.Warning("DCCM is not installed.");
-                //         continue;
-                //     }
-                //     Logger.Warning("Auto-updater is disabled.");
-                //     disableUpdater = true;
-                // }
+                    if (!state.HasFlag(EItemState.k_EItemStateDisabledLocally))
+                    {
+                        Logger.Warning("DCCM is not installed.");
+                        continue;
+                    }
+                    Logger.Warning("Auto-updater is disabled.");
+                    disableUpdater = true;
+                }
 
-                // if (state.HasFlag(EItemState.k_EItemStateNeedsUpdate))
-                // {
-                //     Logger.Information("DCCM needs update.");
-                //     SteamUGC.DownloadItem(new(MAPI_PFID), true);
-                //     continue;
-                // }
+                if (state.HasFlag(EItemState.k_EItemStateNeedsUpdate))
+                {
+                    Logger.Information("DCCM needs update.");
+                    SteamUGC.DownloadItem(new(MAPI_PFID), true);
+                    continue;
+                }
 
-                // if (!SteamUGC.GetItemInstallInfo(new(MAPI_PFID), out _, out var mapiRoot, 1024, out _))
-                // {
-                //     Logger.Warning("DCCM is not installed.");
-                //     continue;
-                // }
-                var mapiRoot = "D:\\Applications\\steam\\steamapps\\workshop\\content\\480\\3633185550";
+                if (!SteamUGC.GetItemInstallInfo(new(MAPI_PFID), out _, out var mapiRoot, 1024, out _))
+                {
+                    Logger.Warning("DCCM is not installed.");
+                    continue;
+                }
 
                 var mapiFolder = Path.Combine(mapiRoot, PlatformServices.Current.Name);
 

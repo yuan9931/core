@@ -25,7 +25,7 @@ namespace DCCMTool.Commands.Steam
 
         public override async Task<int> ExecuteSteamAsync()
         {
-            var updateHandle = SteamUGC.StartItemUpdate(new(480), new(MAPI_PFID));
+            var updateHandle = SteamUGC.StartItemUpdate(new(588650), new(MAPI_PFID));
 
             SteamUGC.SetItemContent(updateHandle, Arguments.InputDir);
 
