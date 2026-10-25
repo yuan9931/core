@@ -31,7 +31,31 @@ namespace ModCore.Modules
             {
                 return;
             }
-            System.IO.File.Copy(from, to, true);
+
+            // The .modded.json overlay is a secondary file that rides along with the real save.
+            // A transient lock on it (antivirus real-time scan, Steam Cloud, or another process
+            // touching the just-written save) must never abort the whole save copy: IOnCopySave is
+            // broadcast with the default (rethrow) flags, so an exception thrown here crashes the
+            // entire game AND prevents the real (.dat) save copy in the hook from running.
+            // Retry briefly in case the lock is transient, then give up with a warning and let the
+            // real save copy proceed without the overlay.
+            for ( var attempt = 0; ; attempt++ )
+            {
+                try
+                {
+                    System.IO.File.Copy(from, to, true);
+                    return;
+                }
+                catch ( IOException ex )
+                {
+                    if ( attempt >= 3 )
+                    {
+                        Logger.Warning(ex, "Could not copy modded save overlay {From} to {To}; continuing without it.", from, to);
+                        return;
+                    }
+                    System.Threading.Thread.Sleep(150);
+                }
+            }
         }
 
         void IOnDeleteSave.OnDeleteSave( int? slot )
