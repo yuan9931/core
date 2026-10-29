@@ -46,10 +46,10 @@ Set-Location -LiteralPath $RepoRoot
 # CONFIGURATION
 ###########################################################################
 
-$BuildProjectFile = "$PSScriptRoot\build\_build.csproj"
-$TempDirectory = "$PSScriptRoot\\.nuke\temp"
+$BuildProjectFile = Join-Path $PSScriptRoot 'build/_build.csproj'
+$TempDirectory = Join-Path $PSScriptRoot '.nuke/temp'
 
-$DotNetGlobalFile = "$PSScriptRoot\\global.json"
+$DotNetGlobalFile = Join-Path $PSScriptRoot 'global.json'
 $DotNetInstallUrl = "https://dot.net/v1/dotnet-install.ps1"
 $DotNetChannel = "STS"
 
@@ -75,13 +75,11 @@ if ($null -ne (Get-Command "dotnet" -ErrorAction SilentlyContinue) -and `
     $env:DOTNET_EXE = (Get-Command "dotnet").Path
 }
 else {
-    # Download install script
-    $DotNetInstallFile = "$TempDirectory\dotnet-install.ps1"
+    # Download install script (use the shell script on non-Windows hosts)
     New-Item -ItemType Directory -Path $TempDirectory -Force | Out-Null
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    (New-Object System.Net.WebClient).DownloadFile($DotNetInstallUrl, $DotNetInstallFile)
 
     # If global.json exists, load expected version
+    $DotNetVersion = $null
     if (Test-Path $DotNetGlobalFile) {
         $DotNetGlobal = $(Get-Content $DotNetGlobalFile | Out-String | ConvertFrom-Json)
         if ($DotNetGlobal.PSObject.Properties["sdk"] -and $DotNetGlobal.sdk.PSObject.Properties["version"]) {
@@ -89,14 +87,27 @@ else {
         }
     }
 
-    # Install by channel or version
-    $DotNetDirectory = "$TempDirectory\dotnet-win"
-    if (!(Test-Path variable:DotNetVersion)) {
-        ExecSafe { & powershell $DotNetInstallFile -InstallDir $DotNetDirectory -Channel $DotNetChannel -NoPath }
+    if ($IsWindows -or (-not (Test-Path Variable:IsWindows))) {
+        $DotNetInstallFile = Join-Path $TempDirectory 'dotnet-install.ps1'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        (New-Object System.Net.WebClient).DownloadFile($DotNetInstallUrl, $DotNetInstallFile)
+
+        $DotNetDirectory = Join-Path $TempDirectory 'dotnet-win'
+        if (-not $DotNetVersion) {
+            ExecSafe { & powershell $DotNetInstallFile -InstallDir $DotNetDirectory -Channel $DotNetChannel -NoPath }
+        } else {
+            ExecSafe { & powershell $DotNetInstallFile -InstallDir $DotNetDirectory -Version $DotNetVersion -NoPath }
+        }
+        $env:DOTNET_EXE = Join-Path $DotNetDirectory 'dotnet.exe'
     } else {
-        ExecSafe { & powershell $DotNetInstallFile -InstallDir $DotNetDirectory -Version $DotNetVersion -NoPath }
+        $DotNetInstallFile = Join-Path $TempDirectory 'dotnet-install.sh'
+        (New-Object System.Net.WebClient).DownloadFile('https://dot.net/v1/dotnet-install.sh', $DotNetInstallFile)
+
+        $DotNetDirectory = Join-Path $TempDirectory 'dotnet-linux'
+        $versionArgs = if ($DotNetVersion) { @('--version', $DotNetVersion) } else { @('--channel', $DotNetChannel) }
+        ExecSafe { & bash $DotNetInstallFile @versionArgs --install-dir $DotNetDirectory --no-path }
+        $env:DOTNET_EXE = Join-Path $DotNetDirectory 'dotnet'
     }
-    $env:DOTNET_EXE = "$DotNetDirectory\dotnet.exe"
     $env:PATH = "$DotNetDirectory;$env:PATH"
 }
 
@@ -114,7 +125,7 @@ Write-Output "Repository root: $RepoRoot"
 ###########################################################################
 
 # ---------------------------------------------------------------------------
-# Visual Studio developer environment.
+# Visual Studio developer environment (Windows only).
 #
 # The win-x64-* CMake presets hardcode CMAKE_C_COMPILER=cl.exe, and
 # sources/native/CMakeLists.txt assumes MSVC:
@@ -123,21 +134,30 @@ Write-Output "Repository root: $RepoRoot"
 # Without vcvars the configure step dies with
 #   "The CMAKE_C_COMPILER: cl.exe is not a full path and was not found in the PATH".
 # If cl.exe is already resolvable we assume an initialised shell and do nothing.
+#
+# On Linux/macOS the MSVC block is skipped entirely: ProgramFiles variables do
+# not exist there and StrictMode would fail the Join-Path binding.
 # ---------------------------------------------------------------------------
 $VcVarsCandidates = [System.Collections.Generic.List[string]]::new()
-if ($env:VCINSTALLDIR) {
-    $VcVarsCandidates.Add((Join-Path $env:VCINSTALLDIR 'Auxiliary\Build\vcvars64.bat'))
-}
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-if (Test-Path $vswhere) {
-    $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
-    if ($vsInstall) {
-        $VcVarsCandidates.Add((Join-Path $vsInstall 'VC\Auxiliary\Build\vcvars64.bat'))
+$isWindowsHost = $IsWindows -or (-not (Test-Path Variable:IsWindows))
+if ($isWindowsHost) {
+    if ($env:VCINSTALLDIR) {
+        $VcVarsCandidates.Add((Join-Path $env:VCINSTALLDIR 'Auxiliary\Build\vcvars64.bat'))
     }
-}
-foreach ($vsRoot in @("$env:ProgramFiles\Microsoft Visual Studio\2022", "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022")) {
-    foreach ($edition in @('Enterprise','Professional','Community','BuildTools')) {
-        $VcVarsCandidates.Add((Join-Path $vsRoot "$edition\VC\Auxiliary\Build\vcvars64.bat"))
+    if (${env:ProgramFiles(x86)}) {
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (Test-Path $vswhere) {
+            $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+            if ($vsInstall) {
+                $VcVarsCandidates.Add((Join-Path $vsInstall 'VC\Auxiliary\Build\vcvars64.bat'))
+            }
+        }
+    }
+    foreach ($vsRoot in @("$env:ProgramFiles\Microsoft Visual Studio\2022", "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022")) {
+        if (-not $vsRoot) { continue }
+        foreach ($edition in @('Enterprise','Professional','Community','BuildTools')) {
+            $VcVarsCandidates.Add((Join-Path $vsRoot "$edition\VC\Auxiliary\Build\vcvars64.bat"))
+        }
     }
 }
 
@@ -195,8 +215,8 @@ if ($msvcReady) {
 # Without them cmake fails at hdlls/libs/sdl with "Could not find a package
 # configuration file provided by SDL3".
 # ---------------------------------------------------------------------------
-$NativeSourceRoot = Join-Path $RepoRoot 'sources\native'
-$HashlinkInclude  = Join-Path $NativeSourceRoot '3rd\hashlink\include'
+$NativeSourceRoot = Join-Path $RepoRoot 'sources/native'
+$HashlinkInclude  = Join-Path $NativeSourceRoot '3rd/hashlink/include'
 
 function Get-NativeDependencies {
     return @(
@@ -254,7 +274,12 @@ function Restore-NativeDependencies {
     }
 }
 
-if (Test-NativeDependencies) {
+if (-not $isWindowsHost) {
+    # On Linux the native dependencies come from system packages
+    # (libsdl3-dev, libopenal-dev, ... installed by CI); the VC zip bundles
+    # below are Windows-only and would break the pkg-config based CMake find.
+    Write-Step "Skipping Windows native dependency restore (non-Windows host)"
+} elseif (Test-NativeDependencies) {
     Write-Step "Native dependencies present (SDL3, OpenAL)"
 } elseif ($NoRestoreDeps) {
     Write-Warning "Native dependencies are missing and -NoRestoreDeps was given; cmake will fail at hdlls/libs/sdl."
@@ -278,7 +303,7 @@ if (Test-NativeDependencies) {
 # A poisoned cache is not self-healing, so drop the tree before configuring.
 # ---------------------------------------------------------------------------
 $NativeOutputRoot = Join-Path $NativeSourceRoot 'out'
-$CMakeCacheFile   = Join-Path $NativeOutputRoot 'build\win-x64-debug\CMakeCache.txt'
+$CMakeCacheFile   = Join-Path $NativeOutputRoot 'build/win-x64-debug/CMakeCache.txt'
 $MSVCBinFragment  = 'VC\Tools\MSVC'
 
 function Test-CMakeCachePoisoned {
@@ -311,14 +336,14 @@ if ($CleanCMakeCache) {
 # "DCCMTool internal install-mdk", which persists the variable for the user.
 # Here we only set it for this process when that tree has already been built.
 # ---------------------------------------------------------------------------
-$MdkRoot = Join-Path $RepoRoot 'bin\core\mdk'
+$MdkRoot = Join-Path $RepoRoot 'bin/core/mdk'
 if ($env:DCCM_MDK_ROOT) {
     Write-Step "DCCM_MDK_ROOT already set: $env:DCCM_MDK_ROOT"
-} elseif (Test-Path (Join-Path $MdkRoot 'build\build.props')) {
+} elseif (Test-Path (Join-Path $MdkRoot 'build/build.props')) {
     $env:DCCM_MDK_ROOT = $MdkRoot
     Write-Step "DCCM_MDK_ROOT = $MdkRoot"
 } else {
-    Write-Warning "MDK not found at $MdkRoot; BuildAssets will fail unless the MDK is installed (run bin\core\mdk\install.ps1)."
+    Write-Warning "MDK not found at $MdkRoot; BuildAssets will fail unless the MDK is installed (run bin/core/mdk/install.ps1)."
 }
 
 ###########################################################################
