@@ -297,8 +297,21 @@ class Build : NukeBuild
                         .SetProject(SourceRoot + "/GOGStartShell"));
                 }
 
+                var deadCellsModdingRid = CurrentOSPlatform switch
+                {
+                    "win" => "win-x64",
+                    "linux" => "linux-x64",
+                    _ => throw new PlatformNotSupportedException($"Unsupported platform for DeadCellsModding publish: {CurrentOSPlatform}")
+                };
+
                 DotNetTasks.DotNetPublish(s => s.SetConfiguration("Release")
-                    .SetProject(SourceRoot + "/DeadCellsModding"));
+                    .SetProject(SourceRoot + "/DeadCellsModding")
+                    .SetSelfContained(true)
+                    .SetRuntime(deadCellsModdingRid)
+                    .SetProperty("UseNativeAOT", "false")
+                    .SetProperty("PublishAot", "false")
+                    .SetProperty("PublishSingleFile", "false")
+                    .SetProperty("RollForward", "LatestMajor"));
             });
 
     Target BuildAssets => _ => _
